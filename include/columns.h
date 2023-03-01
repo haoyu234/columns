@@ -109,7 +109,7 @@ void clVisitChildren(
 template <class T>
 struct clColumnTraits
 {
-    static const uint8_t kind = std::is_arithmetic<T>::value ? \
+    static constexpr uint8_t kind = std::is_arithmetic<T>::value ? \
         (std::is_integral<T>::value ? \
             (std::is_signed<T>::value ? \
                 cl_COLUMN_INT8 + __builtin_ctz(sizeof(T)) : \
