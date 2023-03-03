@@ -120,13 +120,13 @@ struct clColumnTraits
             cl_COLUMN_NONE);
 };
 #define COLUMN_TYPE(PARENT, FIELD) \
-    clColumnTraits< \
+    uint8_t(clColumnTraits< \
         std::remove_cv< \
             std::remove_reference< \
                 decltype(((PARENT *) NULL)->FIELD) \
             >::type \
         >::type \
-    >::kind
+    >::kind)
 #else
 #define COLUMN_TYPE(PARENT, FIELD) \
     _Generic( \
