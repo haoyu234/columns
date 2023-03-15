@@ -46,10 +46,9 @@ typedef struct clObject clObject;
 typedef struct clUnion clUnion;
 typedef struct clColumn clColumn;
 typedef struct clHandler clHandler;
-typedef struct clDecoder clDecoder;
 
 typedef void (*clVisitHandler)(
-    const clHandler *encoder, 
+    const clHandler *handler, 
     const clColumn *column, 
     void *context);
 
@@ -97,7 +96,7 @@ struct clHandler {
 };
 
 void clVisitChildren(
-    const clHandler *encoder, 
+    const clHandler *handler, 
     const clColumn *column, 
     void *context);
 
@@ -119,16 +118,27 @@ struct clColumnTraits
             cl_COLUMN_INT8 + __builtin_ctz(sizeof(T)) : \
             cl_COLUMN_NONE);
 };
-#define COLUMN_TYPE(PARENT, FIELD) \
-    uint8_t(clColumnTraits< \
+
+template <int val>
+struct clColumnAssert
+{
+    static_assert(val, "zero");
+    static constexpr int value = val;
+};
+
+#define COLUMN_TYPE_IMPL(PARENT, FIELD) \
+    (int(clColumnTraits< \
         std::remove_cv< \
-            std::remove_reference< \
-                decltype(((PARENT *) NULL)->FIELD) \
-            >::type \
-        >::type \
-    >::kind)
+            std::remove_reference<decltype(((PARENT *) NULL)->FIELD)>::type >::type >::kind))
+
+#define COLUMN_STATIC_ASSERT(e) \
+    (int(clColumnAssert<(e)>::value))
 #else
-#define COLUMN_TYPE(PARENT, FIELD) \
+
+#define COLUMN_GENERIC_ITEM_FLOAT(T) \
+    T: cl_COLUMN_FLOAT8 + __builtin_ctz(sizeof(T)),
+
+#define COLUMN_TYPE_IMPL(PARENT, FIELD) \
     _Generic( \
         (((PARENT *) NULL)->FIELD), \
         char: cl_COLUMN_INT8, \
@@ -140,12 +150,19 @@ struct clColumnTraits
         uint16_t: cl_COLUMN_UINT16, \
         uint32_t: cl_COLUMN_UINT32, \
         uint64_t: cl_COLUMN_UINT64, \
-        float: cl_COLUMN_FLOAT32, \
-        double: cl_COLUMN_FLOAT64, \
+        COLUMN_GENERIC_ITEM_FLOAT(float) \
+        COLUMN_GENERIC_ITEM_FLOAT(double) \
+        COLUMN_GENERIC_ITEM_FLOAT(long double) \
         bool: cl_COLUMN_BOOL, \
         default: cl_COLUMN_NONE \
     )
+
+#define COLUMN_STATIC_ASSERT(e) \
+    ((int)(sizeof(struct { int:((!!(e))-1); })) + (e))
 #endif
+
+#define COLUMN_TYPE(PARENT, FIELD) \
+    (COLUMN_STATIC_ASSERT(COLUMN_TYPE_IMPL(PARENT, FIELD)))
 
 #define DEFINE_COLUMN_NUMBER(PARENT, FIELD) { \
     .name = #FIELD, \

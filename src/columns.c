@@ -2,7 +2,7 @@
 #include <assert.h>
 
 void clVisitChildren(
-    const clHandler *encoder,
+    const clHandler *handler,
     const clColumn *column,
     void *context)
 {
@@ -27,30 +27,35 @@ void clVisitChildren(
         case cl_COLUMN_FLOAT128:
         case cl_COLUMN_FLOAT256:
         case cl_COLUMN_BOOL:
-            return encoder->visitNumber(
-                encoder, 
+            return handler->visitNumber(
+                handler, 
                 column, 
                 context);
+
         case cl_COLUMN_OBJECT:
-            return encoder->visitObject(
-                encoder, 
+            return handler->visitObject(
+                handler, 
                 column, 
                 context);
+
         case cl_COLUMN_UNION:
-            return encoder->visitUnion(
-                encoder, 
+            return handler->visitUnion(
+                handler, 
                 column, 
                 context);
+
         case cl_COLUMN_FIXED_ARRAY:
-            return encoder->visitFixedArray(
-                encoder, 
+            return handler->visitFixedArray(
+                handler, 
                 column, 
                 context);
+
         case cl_COLUMN_FLEXIBLE_ARRAY:
-            return encoder->visitFlexibleArray(
-                encoder, 
+            return handler->visitFlexibleArray(
+                handler, 
                 column, 
                 context);
+
         default:
             assert(false);
     }

@@ -17,12 +17,25 @@ columns_dep = declare_dependency(
 test(
     'kind',
     executable(
-        'kind',
+        'kindcpp',
         sources: 'tests/kind.cpp',
         override_options: '-cpp_std=c++11',
         dependencies: [
             columns_dep,
             dependency('gtest', main: true)
+        ]
+    )
+)
+
+test(
+    'kind2',
+    executable(
+        'kindc',
+        sources: 'tests/kind.c',
+        override_options: '-c_std=c11',
+        dependencies: [
+            columns_dep,
+            dependency('cunit')
         ]
     )
 )

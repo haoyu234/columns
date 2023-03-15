@@ -15,15 +15,15 @@ TEST(kind, intN)
         uint64_t u64;
     };
 
-    EXPECT_EQ(cl_COLUMN_INT8, COLUMN_TYPE(T, i8));
-    EXPECT_EQ(cl_COLUMN_INT16, COLUMN_TYPE(T, i16));
-    EXPECT_EQ(cl_COLUMN_INT32, COLUMN_TYPE(T, i32));
-    EXPECT_EQ(cl_COLUMN_INT64, COLUMN_TYPE(T, i64));
+    EXPECT_EQ(cl_COLUMN_INT8, COLUMN_TYPE(union T, i8));
+    EXPECT_EQ(cl_COLUMN_INT16, COLUMN_TYPE(union T, i16));
+    EXPECT_EQ(cl_COLUMN_INT32, COLUMN_TYPE(union T, i32));
+    EXPECT_EQ(cl_COLUMN_INT64, COLUMN_TYPE(union T, i64));
 
-    EXPECT_EQ(cl_COLUMN_UINT8, COLUMN_TYPE(T, u8));
-    EXPECT_EQ(cl_COLUMN_UINT16, COLUMN_TYPE(T, u16));
-    EXPECT_EQ(cl_COLUMN_UINT32, COLUMN_TYPE(T, u32));
-    EXPECT_EQ(cl_COLUMN_UINT64, COLUMN_TYPE(T, u64));
+    EXPECT_EQ(cl_COLUMN_UINT8, COLUMN_TYPE(union T, u8));
+    EXPECT_EQ(cl_COLUMN_UINT16, COLUMN_TYPE(union T, u16));
+    EXPECT_EQ(cl_COLUMN_UINT32, COLUMN_TYPE(union T, u32));
+    EXPECT_EQ(cl_COLUMN_UINT64, COLUMN_TYPE(union T, u64));
 }
 
 TEST(kind, floatN)
@@ -32,18 +32,7 @@ TEST(kind, floatN)
     {
         float f;
         double d;
-        #if __HAVE_FLOAT16
-            _Float16 f16;
-        #endif
-        #if __HAVE_FLOAT32
-            _Float32 f32;
-        #endif
-        #if __HAVE_FLOAT64
-            _Float64 f64;
-        #endif
-        #if __HAVE_FLOAT128
-            _Float128 f128;
-        #endif
+        long double ld;
     };
 
     static int SIZE[] = {
@@ -66,24 +55,9 @@ TEST(kind, floatN)
         cl_COLUMN_FLOAT128
     };
 
-    EXPECT_EQ(SIZE[sizeof(float)], COLUMN_TYPE(T, f));
-    EXPECT_EQ(SIZE[sizeof(double)], COLUMN_TYPE(T, d));
-
-    #if __HAVE_FLOAT16
-        EXPECT_EQ(cl_COLUMN_FLOAT16, COLUMN_TYPE(T, f16));
-    #endif
-
-    #if __HAVE_FLOAT32
-        EXPECT_EQ(cl_COLUMN_FLOAT32, COLUMN_TYPE(T, f32));
-    #endif
-
-    #if __HAVE_FLOAT64
-        EXPECT_EQ(cl_COLUMN_FLOAT64, COLUMN_TYPE(T, f64));
-    #endif
-
-    #if __HAVE_FLOAT128
-        EXPECT_EQ(cl_COLUMN_FLOAT128, COLUMN_TYPE(T, f128));
-    #endif
+    EXPECT_EQ(SIZE[sizeof(float)], COLUMN_TYPE(union T, f));
+    EXPECT_EQ(SIZE[sizeof(double)], COLUMN_TYPE(union T, d));
+    EXPECT_EQ(SIZE[sizeof(long double)], COLUMN_TYPE(union T, ld));
 }
 
 TEST(kind, enum)
@@ -101,13 +75,13 @@ TEST(kind, enum)
         enum { V65536 = 65536 } v65536;
     };
 
-    EXPECT_EQ(cl_COLUMN_INT32, COLUMN_TYPE(T, v0));
-    EXPECT_EQ(cl_COLUMN_INT32, COLUMN_TYPE(T, v1));
-    EXPECT_EQ(cl_COLUMN_INT32, COLUMN_TYPE(T, v127));
-    EXPECT_EQ(cl_COLUMN_INT32, COLUMN_TYPE(T, v128));
-    EXPECT_EQ(cl_COLUMN_INT32, COLUMN_TYPE(T, v255));
-    EXPECT_EQ(cl_COLUMN_INT32, COLUMN_TYPE(T, v256));
-    EXPECT_EQ(cl_COLUMN_INT32, COLUMN_TYPE(T, v1024));
-    EXPECT_EQ(cl_COLUMN_INT32, COLUMN_TYPE(T, v65535));
-    EXPECT_EQ(cl_COLUMN_INT32, COLUMN_TYPE(T, v65536));
+    EXPECT_EQ(cl_COLUMN_INT32, COLUMN_TYPE(union T, v0));
+    EXPECT_EQ(cl_COLUMN_INT32, COLUMN_TYPE(union T, v1));
+    EXPECT_EQ(cl_COLUMN_INT32, COLUMN_TYPE(union T, v127));
+    EXPECT_EQ(cl_COLUMN_INT32, COLUMN_TYPE(union T, v128));
+    EXPECT_EQ(cl_COLUMN_INT32, COLUMN_TYPE(union T, v255));
+    EXPECT_EQ(cl_COLUMN_INT32, COLUMN_TYPE(union T, v256));
+    EXPECT_EQ(cl_COLUMN_INT32, COLUMN_TYPE(union T, v1024));
+    EXPECT_EQ(cl_COLUMN_INT32, COLUMN_TYPE(union T, v65535));
+    EXPECT_EQ(cl_COLUMN_INT32, COLUMN_TYPE(union T, v65536));
 }
