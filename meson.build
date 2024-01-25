@@ -7,18 +7,13 @@ project(
 
 columns_dep = declare_dependency(
     include_directories: 'include',
-    link_with: static_library(
-        'columns',
-        sources: 'src/columns.c',
-        include_directories: 'include'
-    ),
 )
 
 test(
-    'kind',
+    'test1',
     executable(
-        'kindcpp',
-        sources: 'tests/kind.cpp',
+        'test1',
+        sources: 'tests/test1.cpp',
         override_options: '-cpp_std=c++11',
         dependencies: [
             columns_dep,
@@ -28,10 +23,10 @@ test(
 )
 
 test(
-    'kind2',
+    'test2',
     executable(
-        'kindc',
-        sources: 'tests/kind.c',
+        'test2',
+        sources: 'tests/test2.c',
         override_options: '-c_std=c11',
         dependencies: [
             columns_dep,
