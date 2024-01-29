@@ -28,9 +28,9 @@ class Context:
     tu: TranslationUnit
     header_code: StringIO = dataclasses.field(default_factory=StringIO)
     source_code: StringIO = dataclasses.field(default_factory=StringIO)
-    check_flexable_array: bool = dataclasses.field(default=False)
     struct_spelling: str = dataclasses.field(default="")
     struct_type_spelling: str = dataclasses.field(default="")
+    prev_name: str = dataclasses.field(default="")
 
 
 def get_compile_args(include_dirs: list[str], standard: str) -> list[str]:
@@ -61,15 +61,40 @@ def in_system_header(location: SourceLocation) -> bool:
     return conf.lib.clang_Location_isInSystemHeader(location) > 0
 
 
-def process_array(cursor: Cursor, ctx: Context):
-    is_flexable_array = ctx.check_flexable_array
-    ctx.check_flexable_array = False
+def check_is_len(prev_name: str, name: str) -> bool:
+    prefixs = ["num"]
+    suffixs = ["num", "size", "count", "len"]
 
+    prev_name_lower = prev_name.lower()
+
+    all_keywords = set(prefixs).union(suffixs)
+    if prev_name_lower in all_keywords:
+        return True
+
+    for s in prefixs:
+        s2 = f"{name}{s}".lower()
+        s3 = f"{name}_{s}".lower()
+
+        if prev_name_lower == s2 or prev_name_lower == s3:
+            return True
+
+    for s in suffixs:
+        s2 = f"{s}{name}".lower()
+        s3 = f"{s}_{name}".lower()
+
+        if prev_name_lower == s2 or prev_name_lower == s3:
+            return True
+
+    return False
+
+
+def process_array(cursor: Cursor, ctx: Context):
     element_type = cursor.type.get_array_element_type()
     element_type = element_type.get_canonical().get_declaration()
 
     array_or_flexable_array = {True: "FLEXIBLE_ARRAY", False: "FIXED_ARRAY"}
 
+    is_flexable_array = check_is_len(ctx.prev_name, cursor.spelling)
     prefix_str = array_or_flexable_array.get(is_flexable_array)
 
     if element_type.kind != CursorKind.NO_DECL_FOUND:
@@ -78,7 +103,7 @@ def process_array(cursor: Cursor, ctx: Context):
         )
     else:
         ctx.source_code.write(
-            f"    DEFINE_COLUMN_{prefix_str}({ctx.struct_type_spelling}, {cursor.spelling}, {element_type.spelling}Object),\n"
+            f"    DEFINE_COLUMN_{prefix_str}({ctx.struct_type_spelling}, {cursor.spelling}),\n"
         )
 
 
@@ -89,6 +114,7 @@ def process_field(cursor: Cursor, ctx: Context):
     if canonical_type.kind in (
         TypeKind.BOOL,
         TypeKind.CHAR_U,
+        TypeKind.CHAR_S,
         TypeKind.UCHAR,
         TypeKind.CHAR16,
         TypeKind.CHAR32,
@@ -109,9 +135,7 @@ def process_field(cursor: Cursor, ctx: Context):
         TypeKind.LONGDOUBLE,
         TypeKind.ENUM,
     ):
-        ctx.check_flexable_array = any(
-            map(cursor.spelling.endswith, ["len", "size", "num"])
-        )
+        ctx.prev_name = cursor.spelling
         ctx.source_code.write(
             f"    DEFINE_COLUMN_NUMBER({ctx.struct_type_spelling}, {cursor.spelling}),\n"
         )
@@ -123,8 +147,6 @@ def process_field(cursor: Cursor, ctx: Context):
     ):
         process_array(cursor, ctx)
         return
-
-    ctx.check_flexable_array = False
 
     if element_type_declaration.kind in (CursorKind.STRUCT_DECL, CursorKind.UNION_DECL):
         struct_or_union = {
@@ -142,11 +164,10 @@ def process_field(cursor: Cursor, ctx: Context):
 
 
 def search_union_or_struct(cursor: Cursor, ctx: Context):
-    ctx.check_flexable_array = False
-
     if not cursor.spelling:
         return
 
+    ctx.prev_name = ""
     ctx.struct_spelling = cursor.spelling
     ctx.struct_type_spelling = cursor.type.spelling
 
@@ -275,13 +296,13 @@ def main():
     work_dir = os.getcwd()
     standard = "c11"
 
-    opts, args = getopt.getopt(sys.argv[1:], "C:I:s")
+    opts, args = getopt.getopt(sys.argv[1:], "C:I", ["std="])
     for opt in opts:
         if opt[0] == "-C":
             work_dir = opt[1]
         elif opt[0] == "-I":
             includes.append(opt[1])
-        elif opt[0] == "-s":
+        elif opt[0] == "--std=":
             standard = opt[1]
 
     inputs.extend(args)
