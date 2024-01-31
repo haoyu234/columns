@@ -19,11 +19,12 @@
 #define cl_COLUMN_FLOAT64 16
 #define cl_COLUMN_FLOAT128 17
 #define cl_COLUMN_FLOAT256 18
-#define cl_COLUMN_BOOL 50
-#define cl_COLUMN_OBJECT 51
-#define cl_COLUMN_UNION 52
-#define cl_COLUMN_FIXED_ARRAY 53
-#define cl_COLUMN_FLEXIBLE_ARRAY 54
+#define cl_COLUMN_BOOL 19
+#define cl_COLUMN_OBJECT 20
+#define cl_COLUMN_UNION 21
+#define cl_COLUMN_FIXED_ARRAY 22
+#define cl_COLUMN_FLEXIBLE_ARRAY 23
+#define cl_COLUMN_MAX 24
 
 #ifdef __cplusplus
 #include <cinttypes>

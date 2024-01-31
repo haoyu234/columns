@@ -1,1 +1,1 @@
-option('BUILD_TESTS', type: 'boolean', value: false)
+option('enable-tests', type: 'boolean', value: false)

@@ -9,7 +9,7 @@ columns_dep = declare_dependency(
     include_directories: 'include',
 )
 
-if get_option('BUILD_TESTS')
+if get_option('enable-tests')
     test(
         'test1',
         executable(
