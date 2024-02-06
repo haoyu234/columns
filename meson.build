@@ -35,4 +35,20 @@ if get_option('enable-tests')
             ]
         )
     )
+
+    test(
+        'test3',
+        executable(
+            'test3',
+            sources: [
+                'tests/test3.cpp',
+                'tests/messages_def.c',
+            ],
+            override_options: '-cpp_std=c++11',
+            dependencies: [
+                columns_dep,
+                dependency('gtest', main: true)
+            ]
+        )
+    )
 endif

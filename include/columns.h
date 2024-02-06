@@ -1,40 +1,42 @@
 #pragma once
 
-#define cl_COLUMN_NONE 0
-#define cl_COLUMN_INT8 1
-#define cl_COLUMN_INT16 2
-#define cl_COLUMN_INT32 3
-#define cl_COLUMN_INT64 4
-#define cl_COLUMN_INT128 5
-#define cl_COLUMN_INT256 6
-#define cl_COLUMN_UINT8 7
-#define cl_COLUMN_UINT16 8
-#define cl_COLUMN_UINT32 9
-#define cl_COLUMN_UINT64 10
-#define cl_COLUMN_UINT128 11
-#define cl_COLUMN_UINT256 12
-#define cl_COLUMN_FLOAT8 13
-#define cl_COLUMN_FLOAT16 14
-#define cl_COLUMN_FLOAT32 15
-#define cl_COLUMN_FLOAT64 16
-#define cl_COLUMN_FLOAT128 17
-#define cl_COLUMN_FLOAT256 18
-#define cl_COLUMN_BOOL 19
-#define cl_COLUMN_OBJECT 20
-#define cl_COLUMN_UNION 21
-#define cl_COLUMN_FIXED_ARRAY 22
-#define cl_COLUMN_FLEXIBLE_ARRAY 23
-#define cl_COLUMN_MAX 24
+enum {
+  cl_NONE,           // 0
+  cl_INT8,           // 1
+  cl_INT16,          // 2
+  cl_INT32,          // 3
+  cl_INT64,          // 4
+  cl_INT128,         // 5
+  cl_INT256,         // 6
+  cl_UINT8,          // 7
+  cl_UINT16,         // 8
+  cl_UINT32,         // 9
+  cl_UINT64,         // 10
+  cl_UINT128,        // 11
+  cl_UINT256,        // 12
+  cl_FLOAT8,         // 13
+  cl_FLOAT16,        // 14
+  cl_FLOAT32,        // 15
+  cl_FLOAT64,        // 16
+  cl_FLOAT128,       // 17
+  cl_FLOAT256,       // 18
+  cl_BOOL,           // 19
+  cl_OBJECT,         // 20
+  cl_UNION,          // 21
+  cl_FIXED_ARRAY,    // 22
+  cl_FLEXIBLE_ARRAY, // 23
+  cl_MAX,            // 24
+};
 
 #ifdef __cplusplus
-#include <cinttypes>
-#include <cstdbool>
+#include <cstdalign>
 #include <cstddef>
-#include <type_traits>
+#include <cstdint>
 #else
-#include <inttypes.h>
+#include <stdalign.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #endif
 
 #ifdef __cplusplus
@@ -48,32 +50,39 @@ typedef struct clUnion clUnion;
 typedef struct clColumn clColumn;
 
 struct clObject {
-  uint32_t num;
-  const clColumn *fields;
+  int32_t num;
+  const clColumn *columns;
 };
 
 struct clUnion {
-  uint32_t num;
-  const clColumn *fields;
+  int32_t num;
+  const clColumn *columns;
+  // const clColumn *tag;
 };
 
 struct clFixedArray {
-  uint8_t flags;
-  uint32_t capacity;
-  const clColumn *element;
+  int8_t flags;
+  int32_t capacity;
+  const clColumn *columns;
 };
 
 struct clFlexibleArray {
-  uint8_t flags;
-  uint32_t capacity;
-  const clColumn *element;
+  int8_t flags;
+  int32_t capacity;
+  const clColumn *columns;
+  // const clColumn *len;
 };
 
 struct clColumn {
+  int8_t kind;
+
+  int8_t len;
   const char *name;
-  uint8_t kind;
-  uint32_t size;
+
+  int32_t size;
+  int32_t align;
   ptrdiff_t offset;
+
   union {
     clObject via_object;
     clUnion via_union;
@@ -96,16 +105,16 @@ template <class T> struct clColumnTraits {
       std::is_arithmetic<T>::value
           ? (std::is_integral<T>::value
                  ? (std::is_signed<T>::value
-                        ? cl_COLUMN_INT8 + __builtin_ctz(sizeof(T))
-                        : cl_COLUMN_UINT8 + __builtin_ctz(sizeof(T)))
-                 : cl_COLUMN_FLOAT8 + __builtin_ctz(sizeof(T)))
-          : (std::is_enum<T>::value ? cl_COLUMN_INT8 + __builtin_ctz(sizeof(T))
-                                    : cl_COLUMN_NONE);
+                        ? cl_INT8 + __builtin_ctz(sizeof(T))
+                        : cl_UINT8 + __builtin_ctz(sizeof(T)))
+                 : cl_FLOAT8 + __builtin_ctz(sizeof(T)))
+          : (std::is_enum<T>::value ? cl_INT8 + __builtin_ctz(sizeof(T))
+                                    : cl_NONE);
   static_assert(kind, "zero");
 };
 } // namespace
 
-#define COLUMN_TYPE_IMPL(PARENT, FIELD)                                        \
+#define COLUMN_TYPE(PARENT, FIELD)                                             \
   (int(clColumnTraits<std::remove_cv<std::remove_reference<                    \
            decltype(((PARENT *)NULL)->FIELD)>::type>::type>::kind))
 
@@ -114,66 +123,68 @@ template <class T> struct clColumnTraits {
 #define COLUMN_STATIC_ASSERT(VAL)                                              \
   ((int)(sizeof(struct { int : ((!!(VAL)) - 1); })) + (VAL))
 
-#define COLUMN_TYPE_IMPL(PARENT, FIELD)                                        \
+#define COLUMN_TYPE(PARENT, FIELD)                                             \
   COLUMN_STATIC_ASSERT(_Generic((((PARENT *)NULL)->FIELD),                     \
-      char: cl_COLUMN_INT8,                                                    \
-      int8_t: cl_COLUMN_INT8,                                                  \
-      int16_t: cl_COLUMN_INT16,                                                \
-      int32_t: cl_COLUMN_INT32,                                                \
-      int64_t: cl_COLUMN_INT64,                                                \
-      uint8_t: cl_COLUMN_UINT8,                                                \
-      uint16_t: cl_COLUMN_UINT16,                                              \
-      uint32_t: cl_COLUMN_UINT32,                                              \
-      uint64_t: cl_COLUMN_UINT64,                                              \
-      float: cl_COLUMN_FLOAT8 + __builtin_ctz(sizeof(float)),                  \
-      double: cl_COLUMN_FLOAT8 + __builtin_ctz(sizeof(double)),                \
-      long double: cl_COLUMN_FLOAT8 + __builtin_ctz(sizeof(long double)),      \
-      bool: cl_COLUMN_BOOL,                                                    \
-      default: cl_COLUMN_NONE))
+      char: cl_INT8,                                                           \
+      int8_t: cl_INT8,                                                         \
+      int16_t: cl_INT16,                                                       \
+      int32_t: cl_INT32,                                                       \
+      int64_t: cl_INT64,                                                       \
+      uint8_t: cl_UINT8,                                                       \
+      uint16_t: cl_UINT16,                                                     \
+      uint32_t: cl_UINT32,                                                     \
+      uint64_t: cl_UINT64,                                                     \
+      float: cl_FLOAT8 + __builtin_ctz(sizeof(float)),                         \
+      double: cl_FLOAT8 + __builtin_ctz(sizeof(double)),                       \
+      long double: cl_FLOAT8 + __builtin_ctz(sizeof(long double)),             \
+      bool: cl_BOOL,                                                           \
+      default: cl_NONE))
 
 #endif
 
-#define COLUMN_TYPE(PARENT, FIELD) (COLUMN_TYPE_IMPL(PARENT, FIELD))
-
-#define DEFINE_COLUMN_NUMBER(PARENT, FIELD)                                    \
+#define FIELD_NUMBER(PARENT, FIELD)                                            \
   {                                                                            \
-    .name = #FIELD, .kind = COLUMN_TYPE(PARENT, FIELD),                        \
-    .size = sizeof(((PARENT *)NULL)->FIELD),                                   \
+    .kind = COLUMN_TYPE(PARENT, FIELD), .len = sizeof(#FIELD) - 1,             \
+    .name = #FIELD, .size = sizeof(((PARENT *)NULL)->FIELD),                   \
+    .align = alignof(__typeof(((PARENT *)NULL)->FIELD)),                       \
     .offset = offsetof(PARENT, FIELD),                                         \
   }
 
-#define DEFINE_COLUMN_OBJECT(PARENT, FIELD, FIELDS)                            \
+#define FIELD_OBJECT(PARENT, FIELD, FIELDS)                                    \
   {                                                                            \
-    .name = #FIELD, .kind = cl_COLUMN_OBJECT,                                  \
+    .kind = cl_OBJECT, .len = sizeof(#FIELD) - 1, .name = #FIELD,              \
     .size = sizeof(((PARENT *)NULL)->FIELD),                                   \
+    .align = alignof(__typeof(((PARENT *)NULL)->FIELD)),                       \
     .offset = offsetof(PARENT, FIELD),                                         \
     {                                                                          \
         .via_object =                                                          \
             {                                                                  \
                 .num = sizeof(FIELDS) / sizeof(FIELDS[0]),                     \
-                .fields = FIELDS,                                              \
+                .columns = FIELDS,                                             \
             },                                                                 \
     },                                                                         \
   }
 
-#define DEFINE_COLUMN_UNION(PARENT, FIELD, FIELDS)                             \
+#define FIELD_UNION(PARENT, FIELD, FIELDS)                                     \
   {                                                                            \
-    .name = #FIELD, .kind = cl_COLUMN_UNION,                                   \
+    .kind = cl_UNION, .len = sizeof(#FIELD) - 1, .name = #FIELD,               \
     .size = sizeof(((PARENT *)NULL)->FIELD),                                   \
+    .align = alignof(__typeof(((PARENT *)NULL)->FIELD)),                       \
     .offset = offsetof(PARENT, FIELD),                                         \
     {                                                                          \
         .via_union =                                                           \
             {                                                                  \
                 .num = sizeof(FIELDS) / sizeof(FIELDS[0]),                     \
-                .fields = FIELDS,                                              \
+                .columns = FIELDS,                                             \
             },                                                                 \
     },                                                                         \
   }
 
-#define DEFINE_COLUMN_FIXED_ARRAY(PARENT, FIELD)                               \
+#define FIELD_FIXED_ARRAY(PARENT, FIELD)                                       \
   {                                                                            \
-    .name = #FIELD, .kind = cl_COLUMN_FIXED_ARRAY,                             \
+    .kind = cl_FIXED_ARRAY, .len = sizeof(#FIELD) - 1, .name = #FIELD,         \
     .size = sizeof(((PARENT *)NULL)->FIELD),                                   \
+    .align = alignof(__typeof(((PARENT *)NULL)->FIELD)),                       \
     .offset = offsetof(PARENT, FIELD),                                         \
     {                                                                          \
         .via_fixed_array =                                                     \
@@ -181,31 +192,33 @@ template <class T> struct clColumnTraits {
                 .flags = COLUMN_TYPE(PARENT, FIELD[0]),                        \
                 .capacity = sizeof(((PARENT *)NULL)->FIELD) /                  \
                             sizeof(((PARENT *)NULL)->FIELD[0]),                \
-                .element = NULL,                                               \
+                .columns = NULL,                                               \
             },                                                                 \
     },                                                                         \
   }
 
-#define DEFINE_COLUMN_OBJECT_FIXED_ARRAY(PARENT, FIELD, ELEMENT)               \
+#define FIELD_OBJECT_FIXED_ARRAY(PARENT, FIELD, ELEMENT)                       \
   {                                                                            \
-    .name = #FIELD, .kind = cl_COLUMN_FIXED_ARRAY,                             \
+    .kind = cl_FIXED_ARRAY, .len = sizeof(#FIELD) - 1, .name = #FIELD,         \
     .size = sizeof(((PARENT *)NULL)->FIELD),                                   \
+    .align = alignof(__typeof(((PARENT *)NULL)->FIELD)),                       \
     .offset = offsetof(PARENT, FIELD),                                         \
     {                                                                          \
         .via_fixed_array =                                                     \
             {                                                                  \
-                .flags = cl_COLUMN_OBJECT,                                     \
+                .flags = cl_OBJECT,                                            \
                 .capacity = sizeof(((PARENT *)NULL)->FIELD) /                  \
                             sizeof(((PARENT *)NULL)->FIELD[0]),                \
-                .element = ELEMENT,                                            \
+                .columns = ELEMENT,                                            \
             },                                                                 \
     },                                                                         \
   }
 
-#define DEFINE_COLUMN_FLEXIBLE_ARRAY(PARENT, FIELD)                            \
+#define FIELD_FLEXIBLE_ARRAY(PARENT, FIELD)                                    \
   {                                                                            \
-    .name = #FIELD, .kind = cl_COLUMN_FLEXIBLE_ARRAY,                          \
+    .kind = cl_FLEXIBLE_ARRAY, .len = sizeof(#FIELD) - 1, .name = #FIELD,      \
     .size = sizeof(((PARENT *)NULL)->FIELD),                                   \
+    .align = alignof(__typeof(((PARENT *)NULL)->FIELD)),                       \
     .offset = offsetof(PARENT, FIELD),                                         \
     {                                                                          \
         .via_flexible_array =                                                  \
@@ -213,36 +226,37 @@ template <class T> struct clColumnTraits {
                 .flags = COLUMN_TYPE(PARENT, FIELD[0]),                        \
                 .capacity = sizeof(((PARENT *)NULL)->FIELD) /                  \
                             sizeof(((PARENT *)NULL)->FIELD[0]),                \
-                .element = NULL,                                               \
+                .columns = NULL,                                               \
             },                                                                 \
     },                                                                         \
   }
 
-#define DEFINE_COLUMN_OBJECT_FLEXIBLE_ARRAY(PARENT, FIELD, ELEMENT)            \
+#define FIELD_OBJECT_FLEXIBLE_ARRAY(PARENT, FIELD, ELEMENT)                    \
   {                                                                            \
-    .name = #FIELD, .kind = cl_COLUMN_FLEXIBLE_ARRAY,                          \
+    .kind = cl_FLEXIBLE_ARRAY, .len = sizeof(#FIELD) - 1, .name = #FIELD,      \
     .size = sizeof(((PARENT *)NULL)->FIELD),                                   \
+    .align = alignof(__typeof(((PARENT *)NULL)->FIELD)),                       \
     .offset = offsetof(PARENT, FIELD),                                         \
     {                                                                          \
         .via_flexible_array =                                                  \
             {                                                                  \
-                .flags = cl_COLUMN_OBJECT,                                     \
+                .flags = cl_OBJECT,                                            \
                 .capacity = sizeof(((PARENT *)NULL)->FIELD) /                  \
                             sizeof(((PARENT *)NULL)->FIELD[0]),                \
-                .element = ELEMENT,                                            \
+                .columns = ELEMENT,                                            \
             },                                                                 \
     },                                                                         \
   }
 
 #define DEFINE_OBJECT(TYPE, FIELDS)                                            \
   {                                                                            \
-    .name = #TYPE, .kind = cl_COLUMN_OBJECT, .size = sizeof(TYPE),             \
-    .offset = 0,                                                               \
+    .kind = cl_OBJECT, .len = sizeof(#TYPE) - 1, .name = #TYPE,                \
+    .size = sizeof(TYPE), .align = alignof(TYPE), .offset = 0,                 \
     {                                                                          \
         .via_object =                                                          \
             {                                                                  \
                 .num = sizeof(FIELDS) / sizeof(FIELDS[0]),                     \
-                .fields = FIELDS,                                              \
+                .columns = FIELDS,                                             \
             },                                                                 \
     },                                                                         \
   }

@@ -16,15 +16,15 @@ void testINTN() {
     uint64_t u64;
   };
 
-  CU_ASSERT_EQUAL(cl_COLUMN_INT8, COLUMN_TYPE(union T, i8));
-  CU_ASSERT_EQUAL(cl_COLUMN_INT16, COLUMN_TYPE(union T, i16));
-  CU_ASSERT_EQUAL(cl_COLUMN_INT32, COLUMN_TYPE(union T, i32));
-  CU_ASSERT_EQUAL(cl_COLUMN_INT64, COLUMN_TYPE(union T, i64));
+  CU_ASSERT_EQUAL(cl_INT8, COLUMN_TYPE(union T, i8));
+  CU_ASSERT_EQUAL(cl_INT16, COLUMN_TYPE(union T, i16));
+  CU_ASSERT_EQUAL(cl_INT32, COLUMN_TYPE(union T, i32));
+  CU_ASSERT_EQUAL(cl_INT64, COLUMN_TYPE(union T, i64));
 
-  CU_ASSERT_EQUAL(cl_COLUMN_UINT8, COLUMN_TYPE(union T, u8));
-  CU_ASSERT_EQUAL(cl_COLUMN_UINT16, COLUMN_TYPE(union T, u16));
-  CU_ASSERT_EQUAL(cl_COLUMN_UINT32, COLUMN_TYPE(union T, u32));
-  CU_ASSERT_EQUAL(cl_COLUMN_UINT64, COLUMN_TYPE(union T, u64));
+  CU_ASSERT_EQUAL(cl_UINT8, COLUMN_TYPE(union T, u8));
+  CU_ASSERT_EQUAL(cl_UINT16, COLUMN_TYPE(union T, u16));
+  CU_ASSERT_EQUAL(cl_UINT32, COLUMN_TYPE(union T, u32));
+  CU_ASSERT_EQUAL(cl_UINT64, COLUMN_TYPE(union T, u64));
 }
 
 void testFLOATN() {
@@ -34,23 +34,9 @@ void testFLOATN() {
     long double ld;
   };
 
-  static int SIZE[] = {0,
-                       cl_COLUMN_FLOAT8,
-                       cl_COLUMN_FLOAT16,
-                       0,
-                       cl_COLUMN_FLOAT32,
-                       0,
-                       0,
-                       0,
-                       cl_COLUMN_FLOAT64,
-                       0,
-                       0,
-                       0,
-                       0,
-                       0,
-                       0,
-                       0,
-                       cl_COLUMN_FLOAT128};
+  static int SIZE[] = {0, cl_FLOAT8, cl_FLOAT16, 0, cl_FLOAT32, 0,
+                       0, 0,         cl_FLOAT64, 0, 0,          0,
+                       0, 0,         0,          0, cl_FLOAT128};
 
   CU_ASSERT_EQUAL(SIZE[sizeof(float)], COLUMN_TYPE(union T, f));
   CU_ASSERT_EQUAL(SIZE[sizeof(double)], COLUMN_TYPE(union T, d));
@@ -70,15 +56,15 @@ void testENUM() {
     enum { V65536 = 65536 } v65536;
   };
 
-  CU_ASSERT_EQUAL(cl_COLUMN_UINT32, COLUMN_TYPE(union T, v0));
-  CU_ASSERT_EQUAL(cl_COLUMN_UINT32, COLUMN_TYPE(union T, v1));
-  CU_ASSERT_EQUAL(cl_COLUMN_UINT32, COLUMN_TYPE(union T, v127));
-  CU_ASSERT_EQUAL(cl_COLUMN_UINT32, COLUMN_TYPE(union T, v128));
-  CU_ASSERT_EQUAL(cl_COLUMN_UINT32, COLUMN_TYPE(union T, v255));
-  CU_ASSERT_EQUAL(cl_COLUMN_UINT32, COLUMN_TYPE(union T, v256));
-  CU_ASSERT_EQUAL(cl_COLUMN_UINT32, COLUMN_TYPE(union T, v1024));
-  CU_ASSERT_EQUAL(cl_COLUMN_UINT32, COLUMN_TYPE(union T, v65535));
-  CU_ASSERT_EQUAL(cl_COLUMN_UINT32, COLUMN_TYPE(union T, v65536));
+  CU_ASSERT_EQUAL(cl_UINT32, COLUMN_TYPE(union T, v0));
+  CU_ASSERT_EQUAL(cl_UINT32, COLUMN_TYPE(union T, v1));
+  CU_ASSERT_EQUAL(cl_UINT32, COLUMN_TYPE(union T, v127));
+  CU_ASSERT_EQUAL(cl_UINT32, COLUMN_TYPE(union T, v128));
+  CU_ASSERT_EQUAL(cl_UINT32, COLUMN_TYPE(union T, v255));
+  CU_ASSERT_EQUAL(cl_UINT32, COLUMN_TYPE(union T, v256));
+  CU_ASSERT_EQUAL(cl_UINT32, COLUMN_TYPE(union T, v1024));
+  CU_ASSERT_EQUAL(cl_UINT32, COLUMN_TYPE(union T, v65535));
+  CU_ASSERT_EQUAL(cl_UINT32, COLUMN_TYPE(union T, v65536));
 }
 
 static CU_TestInfo tests[] = {{"intN", testINTN},

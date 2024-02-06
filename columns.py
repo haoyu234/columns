@@ -99,11 +99,11 @@ def process_array(cursor: Cursor, ctx: Context):
 
     if element_type.kind != CursorKind.NO_DECL_FOUND:
         ctx.source_code.write(
-            f"    DEFINE_COLUMN_OBJECT_{prefix_str}({ctx.struct_type_spelling}, {cursor.spelling}, {element_type.spelling}Object),\n"
+            f"    FIELD_OBJECT_{prefix_str}({ctx.struct_type_spelling}, {cursor.spelling}, {element_type.spelling}Object),\n"
         )
     else:
         ctx.source_code.write(
-            f"    DEFINE_COLUMN_{prefix_str}({ctx.struct_type_spelling}, {cursor.spelling}),\n"
+            f"    FIELD_{prefix_str}({ctx.struct_type_spelling}, {cursor.spelling}),\n"
         )
 
 
@@ -137,7 +137,7 @@ def process_field(cursor: Cursor, ctx: Context):
     ):
         ctx.prev_name = cursor.spelling
         ctx.source_code.write(
-            f"    DEFINE_COLUMN_NUMBER({ctx.struct_type_spelling}, {cursor.spelling}),\n"
+            f"    FIELD_NUMBER({ctx.struct_type_spelling}, {cursor.spelling}),\n"
         )
         return
 
@@ -150,8 +150,8 @@ def process_field(cursor: Cursor, ctx: Context):
 
     if element_type_declaration.kind in (CursorKind.STRUCT_DECL, CursorKind.UNION_DECL):
         struct_or_union = {
-            CursorKind.UNION_DECL: "DEFINE_COLUMN_UNION",
-            CursorKind.STRUCT_DECL: "DEFINE_COLUMN_OBJECT",
+            CursorKind.UNION_DECL: "FIELD_UNION",
+            CursorKind.STRUCT_DECL: "FIELD_OBJECT",
         }
 
         prefix_str = struct_or_union.get(element_type_declaration.kind)
