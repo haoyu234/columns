@@ -4,13 +4,16 @@
 clcli.py
 """
 
+import sys
+
+sys.dont_write_bytecode = True
+
 import ctypes
 import getopt
 import dataclasses
 from io import StringIO
 import os
 import re
-import sys
 from clang.cindex import conf, register_function
 from clang.cindex import (
     Config,
@@ -22,15 +25,16 @@ from clang.cindex import (
     SourceLocation,
 )
 
+import plugin_stub
+
 
 @dataclasses.dataclass
 class Context:
     tu: TranslationUnit
     header_code: StringIO = dataclasses.field(default_factory=StringIO)
     source_code: StringIO = dataclasses.field(default_factory=StringIO)
-    struct_spelling: str = dataclasses.field(default="")
     struct_type_spelling: str = dataclasses.field(default="")
-    prev_name: str = dataclasses.field(default="")
+    prev_cursor: Cursor = dataclasses.field(default=None)
 
 
 def get_compile_args(include_dirs: list[str], standard: str) -> list[str]:
@@ -61,45 +65,22 @@ def in_system_header(location: SourceLocation) -> bool:
     return conf.lib.clang_Location_isInSystemHeader(location) > 0
 
 
-def check_is_len(prev_name: str, name: str) -> bool:
-    prefixs = ["num"]
-    suffixs = ["num", "size", "count", "len"]
-
-    prev_name_lower = prev_name.lower()
-
-    all_keywords = set(prefixs).union(suffixs)
-    if prev_name_lower in all_keywords:
-        return True
-
-    for s in prefixs:
-        s2 = f"{name}{s}".lower()
-        s3 = f"{name}_{s}".lower()
-
-        if prev_name_lower == s2 or prev_name_lower == s3:
-            return True
-
-    for s in suffixs:
-        s2 = f"{s}{name}".lower()
-        s3 = f"{s}_{name}".lower()
-
-        if prev_name_lower == s2 or prev_name_lower == s3:
-            return True
-
-    return False
-
-
 def process_array(cursor: Cursor, ctx: Context):
     element_type = cursor.type.get_array_element_type()
     element_type = element_type.get_canonical().get_declaration()
 
     array_or_flexable_array = {True: "FLEXIBLE_ARRAY", False: "FIXED_ARRAY"}
 
-    is_flexable_array = check_is_len(ctx.prev_name, cursor.spelling)
+    is_flexable_array = False
+    if ctx.prev_cursor:
+        is_flexable_array = plugin_stub.check_is_flexable_array(ctx.prev_cursor, cursor)
     prefix_str = array_or_flexable_array.get(is_flexable_array)
+
+    element_name = plugin_stub.generate_object_name(element_type)
 
     if element_type.kind != CursorKind.NO_DECL_FOUND:
         ctx.source_code.write(
-            f"    FIELD_OBJECT_{prefix_str}({ctx.struct_type_spelling}, {cursor.spelling}, {element_type.spelling}Object),\n"
+            f"    FIELD_OBJECT_{prefix_str}({ctx.struct_type_spelling}, {cursor.spelling}, {element_name}),\n"
         )
     else:
         ctx.source_code.write(
@@ -135,7 +116,7 @@ def process_field(cursor: Cursor, ctx: Context):
         TypeKind.LONGDOUBLE,
         TypeKind.ENUM,
     ):
-        ctx.prev_name = cursor.spelling
+        ctx.prev_cursor = cursor
         ctx.source_code.write(
             f"    FIELD_NUMBER({ctx.struct_type_spelling}, {cursor.spelling}),\n"
         )
@@ -167,8 +148,7 @@ def search_union_or_struct(cursor: Cursor, ctx: Context):
     if not cursor.spelling:
         return
 
-    ctx.prev_name = ""
-    ctx.struct_spelling = cursor.spelling
+    ctx.prev_cursor = None
     ctx.struct_type_spelling = cursor.type.spelling
 
     location = cursor.location
@@ -176,11 +156,13 @@ def search_union_or_struct(cursor: Cursor, ctx: Context):
     line = location.line
     column = location.column
 
+    plugin_stub.begin_object(cursor)
+    object_name = plugin_stub.generate_object_name(cursor)
+    columns_name = plugin_stub.generate_columns_name(cursor)
+
     ctx.source_code.write(f"// {name}:{line}:{column}\n")
 
-    ctx.source_code.write(
-        f"static const clColumn {ctx.struct_spelling}Columns[] = {{\n"
-    )
+    ctx.source_code.write(f"static const clColumn {columns_name}[] = {{\n")
 
     for child in cursor.get_children():
         if child.kind != CursorKind.FIELD_DECL:
@@ -193,15 +175,15 @@ def search_union_or_struct(cursor: Cursor, ctx: Context):
     if cursor.kind != CursorKind.STRUCT_DECL:
         return
 
-    ctx.source_code.write(f"const clColumn {ctx.struct_spelling}Object[] = {{\n")
+    ctx.source_code.write(f"const clColumn {object_name}[] = {{\n")
     ctx.source_code.write(
-        f"    DEFINE_OBJECT({ctx.struct_type_spelling}, {ctx.struct_spelling}Columns),\n"
+        f"    DEFINE_OBJECT({ctx.struct_type_spelling}, {columns_name}),\n"
     )
 
     ctx.source_code.write("};\n\n")
-    ctx.header_code.write(
-        f"extern const struct clColumn {ctx.struct_spelling}Object[];\n"
-    )
+    ctx.header_code.write(f"extern const struct clColumn {object_name}[];\n")
+
+    plugin_stub.end_object(cursor, object_name)
 
 
 def search_namespace_or_union_or_struct(cursor: Cursor, ctx: Context):
@@ -295,8 +277,9 @@ def main():
     includes = []
     work_dir = os.getcwd()
     standard = "c11"
+    plugin = ""
 
-    opts, args = getopt.getopt(sys.argv[1:], "C:I", ["std="])
+    opts, args = getopt.getopt(sys.argv[1:], "C:I:p:", ["std="])
     for opt in opts:
         if opt[0] == "-C":
             work_dir = opt[1]
@@ -304,6 +287,8 @@ def main():
             includes.append(opt[1])
         elif opt[0] == "--std=":
             standard = opt[1]
+        elif opt[0] == "-p":
+            plugin = opt[1]
 
     inputs.extend(args)
 
@@ -311,6 +296,11 @@ def main():
     work_dir = os.getcwd()
 
     outputs = dict()
+
+    if len(plugin) > 0:
+        plugin_stub.load_plugin(plugin)
+
+    plugin_stub.init()
 
     for path in inputs:
         tu = create_unit(path, includes, standard)
@@ -352,6 +342,8 @@ def main():
 
         with open(f"{stem}_def.{suffix}", mode="w", encoding="UTF-8") as out:
             out.write(source_code)
+
+    plugin_stub.complete()
 
 
 if __name__ == "__main__":

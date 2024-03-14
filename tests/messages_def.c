@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-// messages.h:3:8
+// messages.h:4:8
 static const clColumn stUseItemReqColumns[] = {
     FIELD_NUMBER(struct stUseItemReq, itemID),
 };
@@ -17,7 +17,7 @@ const clColumn stUseItemReqObject[] = {
     DEFINE_OBJECT(struct stUseItemReq, stUseItemReqColumns),
 };
 
-// messages.h:7:8
+// messages.h:9:8
 static const clColumn stDropColumns[] = {
     FIELD_NUMBER(struct stDrop, itemID),
     FIELD_NUMBER(struct stDrop, itemNum),
@@ -26,7 +26,7 @@ const clColumn stDropObject[] = {
     DEFINE_OBJECT(struct stDrop, stDropColumns),
 };
 
-// messages.h:12:8
+// messages.h:15:8
 static const clColumn stUseItemRspColumns[] = {
     FIELD_NUMBER(struct stUseItemRsp, code),
     FIELD_NUMBER(struct stUseItemRsp, num),
@@ -36,7 +36,7 @@ const clColumn stUseItemRspObject[] = {
     DEFINE_OBJECT(struct stUseItemRsp, stUseItemRspColumns),
 };
 
-// messages.h:19:7
+// messages.h:22:7
 static const clColumn stValueColumns[] = {
     FIELD_NUMBER(union stValue, i32),
     FIELD_NUMBER(union stValue, u32),
@@ -44,7 +44,7 @@ static const clColumn stValueColumns[] = {
     FIELD_NUMBER(union stValue, u8),
     FIELD_FIXED_ARRAY(union stValue, other),
 };
-// messages.h:29:8
+// messages.h:32:8
 static const clColumn stFuzzColumns[] = {
     FIELD_FIXED_ARRAY(struct stFuzz, name),
     FIELD_NUMBER(struct stFuzz, tag),
@@ -54,7 +54,7 @@ const clColumn stFuzzObject[] = {
     DEFINE_OBJECT(struct stFuzz, stFuzzColumns),
 };
 
-// messages.h:35:8
+// messages.h:38:8
 static const clColumn stTestsColumns[] = {
     FIELD_NUMBER(struct stTests, epoch),
     FIELD_NUMBER(struct stTests, len),

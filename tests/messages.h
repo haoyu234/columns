@@ -1,14 +1,17 @@
 #include <stdint.h> // IWYU pragma: keep
 
+// cmd = 1
 struct stUseItemReq {
   uint32_t itemID;
 };
 
+// cmd = 2
 struct stDrop {
   uint32_t itemID;
   uint32_t itemNum;
 };
 
+/*cmd = 3 */
 struct stUseItemRsp {
   uint32_t code;
   uint32_t num;
