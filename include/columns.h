@@ -25,7 +25,8 @@ enum {
   cl_UNION,          // 21
   cl_FIXED_ARRAY,    // 22
   cl_FLEXIBLE_ARRAY, // 23
-  cl_MAX,            // 24
+  cl_STRING,         // 24
+  cl_MAX,            // 25
 };
 
 #ifdef __cplusplus
@@ -48,6 +49,7 @@ typedef struct clFlexibleArray clFlexibleArray;
 typedef struct clObject clObject;
 typedef struct clUnion clUnion;
 typedef struct clColumn clColumn;
+typedef struct clString clString;
 
 struct clObject {
   int32_t num;
@@ -57,27 +59,32 @@ struct clObject {
 struct clUnion {
   int32_t num;
   const clColumn *columns;
-  // const clColumn *tag;
 };
 
 struct clFixedArray {
-  int8_t flags;
+  int8_t tp;
   int32_t capacity;
   const clColumn *columns;
 };
 
 struct clFlexibleArray {
-  int8_t flags;
+  int32_t tp;
   int32_t capacity;
   const clColumn *columns;
-  // const clColumn *len;
+};
+
+struct clString {
+  int8_t tp;
+  int32_t capacity;
 };
 
 struct clColumn {
-  int8_t kind;
+  int8_t tp;
 
-  int8_t len;
-  const char *name;
+  struct {
+    int8_t len;
+    const char *string;
+  } name;
 
   int32_t size;
   int32_t align;
@@ -88,6 +95,7 @@ struct clColumn {
     clUnion via_union;
     clFixedArray via_fixed_array;
     clFlexibleArray via_flexible_array;
+    clString via_string;
   };
 };
 
@@ -144,15 +152,25 @@ template <class T> struct clColumnTraits {
 
 #define FIELD_NUMBER(PARENT, FIELD)                                            \
   {                                                                            \
-    .kind = COLUMN_TYPE(PARENT, FIELD), .len = sizeof(#FIELD) - 1,             \
-    .name = #FIELD, .size = sizeof(((PARENT *)NULL)->FIELD),                   \
+    .tp = COLUMN_TYPE(PARENT, FIELD),                                          \
+    .name =                                                                    \
+        {                                                                      \
+            .len = sizeof(#FIELD) - 1,                                         \
+            .string = #FIELD,                                                  \
+        },                                                                     \
+    .size = sizeof(((PARENT *)NULL)->FIELD),                                   \
     .align = alignof(__typeof(((PARENT *)NULL)->FIELD)),                       \
     .offset = offsetof(PARENT, FIELD),                                         \
   }
 
 #define FIELD_OBJECT(PARENT, FIELD, FIELDS)                                    \
   {                                                                            \
-    .kind = cl_OBJECT, .len = sizeof(#FIELD) - 1, .name = #FIELD,              \
+    .tp = cl_OBJECT,                                                           \
+    .name =                                                                    \
+        {                                                                      \
+            .len = sizeof(#FIELD) - 1,                                         \
+            .string = #FIELD,                                                  \
+        },                                                                     \
     .size = sizeof(((PARENT *)NULL)->FIELD),                                   \
     .align = alignof(__typeof(((PARENT *)NULL)->FIELD)),                       \
     .offset = offsetof(PARENT, FIELD),                                         \
@@ -167,7 +185,12 @@ template <class T> struct clColumnTraits {
 
 #define FIELD_UNION(PARENT, FIELD, FIELDS)                                     \
   {                                                                            \
-    .kind = cl_UNION, .len = sizeof(#FIELD) - 1, .name = #FIELD,               \
+    .tp = cl_UNION,                                                            \
+    .name =                                                                    \
+        {                                                                      \
+            .len = sizeof(#FIELD) - 1,                                         \
+            .string = #FIELD,                                                  \
+        },                                                                     \
     .size = sizeof(((PARENT *)NULL)->FIELD),                                   \
     .align = alignof(__typeof(((PARENT *)NULL)->FIELD)),                       \
     .offset = offsetof(PARENT, FIELD),                                         \
@@ -182,14 +205,19 @@ template <class T> struct clColumnTraits {
 
 #define FIELD_FIXED_ARRAY(PARENT, FIELD)                                       \
   {                                                                            \
-    .kind = cl_FIXED_ARRAY, .len = sizeof(#FIELD) - 1, .name = #FIELD,         \
+    .tp = cl_FIXED_ARRAY,                                                      \
+    .name =                                                                    \
+        {                                                                      \
+            .len = sizeof(#FIELD) - 1,                                         \
+            .string = #FIELD,                                                  \
+        },                                                                     \
     .size = sizeof(((PARENT *)NULL)->FIELD),                                   \
     .align = alignof(__typeof(((PARENT *)NULL)->FIELD)),                       \
     .offset = offsetof(PARENT, FIELD),                                         \
     {                                                                          \
         .via_fixed_array =                                                     \
             {                                                                  \
-                .flags = COLUMN_TYPE(PARENT, FIELD[0]),                        \
+                .tp = COLUMN_TYPE(PARENT, FIELD[0]),                           \
                 .capacity = sizeof(((PARENT *)NULL)->FIELD) /                  \
                             sizeof(((PARENT *)NULL)->FIELD[0]),                \
                 .columns = NULL,                                               \
@@ -199,14 +227,19 @@ template <class T> struct clColumnTraits {
 
 #define FIELD_OBJECT_FIXED_ARRAY(PARENT, FIELD, ELEMENT)                       \
   {                                                                            \
-    .kind = cl_FIXED_ARRAY, .len = sizeof(#FIELD) - 1, .name = #FIELD,         \
+    .tp = cl_FIXED_ARRAY,                                                      \
+    .name =                                                                    \
+        {                                                                      \
+            .len = sizeof(#FIELD) - 1,                                         \
+            .string = #FIELD,                                                  \
+        },                                                                     \
     .size = sizeof(((PARENT *)NULL)->FIELD),                                   \
     .align = alignof(__typeof(((PARENT *)NULL)->FIELD)),                       \
     .offset = offsetof(PARENT, FIELD),                                         \
     {                                                                          \
         .via_fixed_array =                                                     \
             {                                                                  \
-                .flags = cl_OBJECT,                                            \
+                .tp = cl_OBJECT,                                               \
                 .capacity = sizeof(((PARENT *)NULL)->FIELD) /                  \
                             sizeof(((PARENT *)NULL)->FIELD[0]),                \
                 .columns = ELEMENT,                                            \
@@ -216,14 +249,19 @@ template <class T> struct clColumnTraits {
 
 #define FIELD_FLEXIBLE_ARRAY(PARENT, FIELD)                                    \
   {                                                                            \
-    .kind = cl_FLEXIBLE_ARRAY, .len = sizeof(#FIELD) - 1, .name = #FIELD,      \
+    .tp = cl_FLEXIBLE_ARRAY,                                                   \
+    .name =                                                                    \
+        {                                                                      \
+            .len = sizeof(#FIELD) - 1,                                         \
+            .string = #FIELD,                                                  \
+        },                                                                     \
     .size = sizeof(((PARENT *)NULL)->FIELD),                                   \
     .align = alignof(__typeof(((PARENT *)NULL)->FIELD)),                       \
     .offset = offsetof(PARENT, FIELD),                                         \
     {                                                                          \
         .via_flexible_array =                                                  \
             {                                                                  \
-                .flags = COLUMN_TYPE(PARENT, FIELD[0]),                        \
+                .tp = COLUMN_TYPE(PARENT, FIELD[0]),                           \
                 .capacity = sizeof(((PARENT *)NULL)->FIELD) /                  \
                             sizeof(((PARENT *)NULL)->FIELD[0]),                \
                 .columns = NULL,                                               \
@@ -233,14 +271,19 @@ template <class T> struct clColumnTraits {
 
 #define FIELD_OBJECT_FLEXIBLE_ARRAY(PARENT, FIELD, ELEMENT)                    \
   {                                                                            \
-    .kind = cl_FLEXIBLE_ARRAY, .len = sizeof(#FIELD) - 1, .name = #FIELD,      \
+    .tp = cl_FLEXIBLE_ARRAY,                                                   \
+    .name =                                                                    \
+        {                                                                      \
+            .len = sizeof(#FIELD) - 1,                                         \
+            .string = #FIELD,                                                  \
+        },                                                                     \
     .size = sizeof(((PARENT *)NULL)->FIELD),                                   \
     .align = alignof(__typeof(((PARENT *)NULL)->FIELD)),                       \
     .offset = offsetof(PARENT, FIELD),                                         \
     {                                                                          \
         .via_flexible_array =                                                  \
             {                                                                  \
-                .flags = cl_OBJECT,                                            \
+                .tp = cl_OBJECT,                                               \
                 .capacity = sizeof(((PARENT *)NULL)->FIELD) /                  \
                             sizeof(((PARENT *)NULL)->FIELD[0]),                \
                 .columns = ELEMENT,                                            \
@@ -248,9 +291,35 @@ template <class T> struct clColumnTraits {
     },                                                                         \
   }
 
+#define FIELD_STRING(PARENT, FIELD)                                            \
+  {                                                                            \
+    .tp = cl_STRING,                                                           \
+    .name =                                                                    \
+        {                                                                      \
+            .len = sizeof(#FIELD) - 1,                                         \
+            .string = #FIELD,                                                  \
+        },                                                                     \
+    .size = sizeof(((PARENT *)NULL)->FIELD),                                   \
+    .align = alignof(__typeof(((PARENT *)NULL)->FIELD)),                       \
+    .offset = offsetof(PARENT, FIELD),                                         \
+    {                                                                          \
+        .via_string =                                                          \
+            {                                                                  \
+                .tp = COLUMN_TYPE(PARENT, FIELD[0]),                           \
+                .capacity = sizeof(((PARENT *)NULL)->FIELD) /                  \
+                            sizeof(((PARENT *)NULL)->FIELD[0]),                \
+            },                                                                 \
+    },                                                                         \
+  }
+
 #define DEFINE_OBJECT(TYPE, FIELDS)                                            \
   {                                                                            \
-    .kind = cl_OBJECT, .len = sizeof(#TYPE) - 1, .name = #TYPE,                \
+    .tp = cl_OBJECT,                                                           \
+    .name =                                                                    \
+        {                                                                      \
+            .len = sizeof(#TYPE) - 1,                                          \
+            .string = #TYPE,                                                   \
+        },                                                                     \
     .size = sizeof(TYPE), .align = alignof(TYPE), .offset = 0,                 \
     {                                                                          \
         .via_object =                                                          \

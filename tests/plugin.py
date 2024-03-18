@@ -7,10 +7,6 @@ import tomllib
 from clang.cindex import Cursor
 
 
-def generate_object_name(cursor: Cursor) -> str:
-    return cursor.spelling + "Object"
-
-
 def end_object(cursor: Cursor, name: str):
     comment = cursor.raw_comment
     if not comment:

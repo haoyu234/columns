@@ -10,60 +10,72 @@ extern "C" {
 #endif
 
 // messages.h:4:8
-static const clColumn stUseItemReqColumns[] = {
+static const clColumn c__S_stUseItemReq[] = {
     FIELD_NUMBER(struct stUseItemReq, itemID),
 };
 const clColumn stUseItemReqObject[] = {
-    DEFINE_OBJECT(struct stUseItemReq, stUseItemReqColumns),
+    DEFINE_OBJECT(struct stUseItemReq, c__S_stUseItemReq),
 };
-
 // messages.h:9:8
-static const clColumn stDropColumns[] = {
+static const clColumn c__S_stDrop[] = {
     FIELD_NUMBER(struct stDrop, itemID),
     FIELD_NUMBER(struct stDrop, itemNum),
 };
 const clColumn stDropObject[] = {
-    DEFINE_OBJECT(struct stDrop, stDropColumns),
+    DEFINE_OBJECT(struct stDrop, c__S_stDrop),
 };
-
 // messages.h:15:8
-static const clColumn stUseItemRspColumns[] = {
+static const clColumn c__S_stUseItemRsp[] = {
     FIELD_NUMBER(struct stUseItemRsp, code),
     FIELD_NUMBER(struct stUseItemRsp, num),
     FIELD_OBJECT_FLEXIBLE_ARRAY(struct stUseItemRsp, drops, stDropObject),
 };
 const clColumn stUseItemRspObject[] = {
-    DEFINE_OBJECT(struct stUseItemRsp, stUseItemRspColumns),
+    DEFINE_OBJECT(struct stUseItemRsp, c__S_stUseItemRsp),
 };
-
 // messages.h:22:7
-static const clColumn stValueColumns[] = {
+static const clColumn c__U_stValue[] = {
     FIELD_NUMBER(union stValue, i32),
     FIELD_NUMBER(union stValue, u32),
     FIELD_NUMBER(union stValue, c),
     FIELD_NUMBER(union stValue, u8),
     FIELD_FIXED_ARRAY(union stValue, other),
 };
+// messages.h:34:3
+static const clColumn c__S_stInlineUnion_U_messages_h_406[] = {
+    FIELD_NUMBER(__typeof(((struct stInlineUnion *)NULL)->abc), i32),
+    FIELD_NUMBER(__typeof(((struct stInlineUnion *)NULL)->abc), u32),
+    FIELD_NUMBER(__typeof(((struct stInlineUnion *)NULL)->abc), c),
+    FIELD_NUMBER(__typeof(((struct stInlineUnion *)NULL)->abc), u8),
+    FIELD_FIXED_ARRAY(__typeof(((struct stInlineUnion *)NULL)->abc), other),
+};
 // messages.h:32:8
-static const clColumn stFuzzColumns[] = {
-    FIELD_FIXED_ARRAY(struct stFuzz, name),
+static const clColumn c__S_stInlineUnion[] = {
+    FIELD_NUMBER(struct stInlineUnion, tag),
+    FIELD_UNION(struct stInlineUnion, abc, c__S_stInlineUnion_U_messages_h_406),
+};
+const clColumn stInlineUnionObject[] = {
+    DEFINE_OBJECT(struct stInlineUnion, c__S_stInlineUnion),
+};
+// messages.h:45:8
+static const clColumn c__S_stFuzz[] = {
+    FIELD_STRING(struct stFuzz, name),
     FIELD_NUMBER(struct stFuzz, tag),
-    FIELD_UNION(struct stFuzz, v, stValueColumns),
+    FIELD_UNION(struct stFuzz, v, c__U_stValue),
 };
 const clColumn stFuzzObject[] = {
-    DEFINE_OBJECT(struct stFuzz, stFuzzColumns),
+    DEFINE_OBJECT(struct stFuzz, c__S_stFuzz),
 };
-
-// messages.h:38:8
-static const clColumn stTestsColumns[] = {
+// messages.h:51:8
+static const clColumn c__S_stTests[] = {
     FIELD_NUMBER(struct stTests, epoch),
-    FIELD_NUMBER(struct stTests, len),
-    FIELD_FLEXIBLE_ARRAY(struct stTests, name),
+    FIELD_STRING(struct stTests, name),
     FIELD_NUMBER(struct stTests, fuzzNum),
     FIELD_OBJECT_FLEXIBLE_ARRAY(struct stTests, fuzz, stFuzzObject),
+    FIELD_OBJECT(struct stTests, inlineUnion, c__S_stInlineUnion),
 };
 const clColumn stTestsObject[] = {
-    DEFINE_OBJECT(struct stTests, stTestsColumns),
+    DEFINE_OBJECT(struct stTests, c__S_stTests),
 };
 #ifdef __cplusplus
 }

@@ -31,10 +31,24 @@ import plugin_stub
 @dataclasses.dataclass
 class Context:
     tu: TranslationUnit
-    header_code: StringIO = dataclasses.field(default_factory=StringIO)
-    source_code: StringIO = dataclasses.field(default_factory=StringIO)
-    struct_type_spelling: str = dataclasses.field(default="")
-    prev_cursor: Cursor = dataclasses.field(default=None)
+    header_sio: StringIO
+    current_object_sio: StringIO
+    object_stack: list[tuple[str, StringIO]]
+    source_sio: StringIO
+    parent_spelling: str
+    prev_cursor: Cursor
+
+    def push_new_object(self, parent_spelling: str):
+        self.prev_cursor = None
+        self.object_stack.append((self.parent_spelling, self.current_object_sio))
+        self.parent_spelling = parent_spelling
+        self.current_object_sio = StringIO()
+
+    def pop_object(self):
+        parent_spelling, current_object_sio = self.object_stack.pop()
+        self.source_sio.write(self.current_object_sio.getvalue())
+        self.current_object_sio = current_object_sio
+        self.parent_spelling = parent_spelling
 
 
 def get_compile_args(include_dirs: list[str], standard: str) -> list[str]:
@@ -65,9 +79,65 @@ def in_system_header(location: SourceLocation) -> bool:
     return conf.lib.clang_Location_isInSystemHeader(location) > 0
 
 
+CHAR_TYPE = [
+    TypeKind.CHAR_U,
+    TypeKind.CHAR_S,
+    TypeKind.UCHAR,
+    TypeKind.CHAR16,
+    TypeKind.CHAR32,
+    TypeKind.USHORT,
+    TypeKind.UINT,
+    TypeKind.CHAR_S,
+    TypeKind.SCHAR,
+    TypeKind.SHORT,
+    TypeKind.INT,
+]
+
+BASE_TYPE = [
+    TypeKind.BOOL,
+    TypeKind.CHAR_U,
+    TypeKind.CHAR_S,
+    TypeKind.UCHAR,
+    TypeKind.CHAR16,
+    TypeKind.CHAR32,
+    TypeKind.USHORT,
+    TypeKind.UINT,
+    TypeKind.ULONG,
+    TypeKind.ULONGLONG,
+    TypeKind.UINT128,
+    TypeKind.CHAR_S,
+    TypeKind.SCHAR,
+    TypeKind.SHORT,
+    TypeKind.INT,
+    TypeKind.LONG,
+    TypeKind.LONGLONG,
+    TypeKind.INT128,
+    TypeKind.FLOAT,
+    TypeKind.DOUBLE,
+    TypeKind.LONGDOUBLE,
+    TypeKind.ENUM,
+]
+
+
+def process_string(cursor: Cursor, ctx: Context):
+    element_type = cursor.type.get_array_element_type()
+
+    if element_type.kind not in CHAR_TYPE:
+        raise Exception("类型错误")
+
+    element_type = element_type.get_canonical().get_declaration()
+
+    if element_type.kind != CursorKind.NO_DECL_FOUND:
+        raise Exception("类型错误")
+
+    ctx.current_object_sio.write(
+        f"    FIELD_STRING({ctx.parent_spelling}, {cursor.spelling}),\n"
+    )
+
+
 def process_array(cursor: Cursor, ctx: Context):
     element_type = cursor.type.get_array_element_type()
-    element_type = element_type.get_canonical().get_declaration()
+    element_type_declaration = element_type.get_canonical().get_declaration()
 
     array_or_flexable_array = {True: "FLEXIBLE_ARRAY", False: "FIXED_ARRAY"}
 
@@ -76,15 +146,14 @@ def process_array(cursor: Cursor, ctx: Context):
         is_flexable_array = plugin_stub.check_is_flexable_array(ctx.prev_cursor, cursor)
     prefix_str = array_or_flexable_array.get(is_flexable_array)
 
-    element_name = plugin_stub.generate_object_name(element_type)
-
-    if element_type.kind != CursorKind.NO_DECL_FOUND:
-        ctx.source_code.write(
-            f"    FIELD_OBJECT_{prefix_str}({ctx.struct_type_spelling}, {cursor.spelling}, {element_name}),\n"
+    if element_type_declaration.kind != CursorKind.NO_DECL_FOUND:
+        element_name = plugin_stub.generate_object_name(element_type_declaration)
+        ctx.current_object_sio.write(
+            f"    FIELD_OBJECT_{prefix_str}({ctx.parent_spelling}, {cursor.spelling}, {element_name}),\n"
         )
     else:
-        ctx.source_code.write(
-            f"    FIELD_{prefix_str}({ctx.struct_type_spelling}, {cursor.spelling}),\n"
+        ctx.current_object_sio.write(
+            f"    FIELD_{prefix_str}({ctx.parent_spelling}, {cursor.spelling}),\n"
         )
 
 
@@ -92,33 +161,10 @@ def process_field(cursor: Cursor, ctx: Context):
     canonical_type = cursor.type.get_canonical()
     element_type_declaration = canonical_type.get_declaration()
 
-    if canonical_type.kind in (
-        TypeKind.BOOL,
-        TypeKind.CHAR_U,
-        TypeKind.CHAR_S,
-        TypeKind.UCHAR,
-        TypeKind.CHAR16,
-        TypeKind.CHAR32,
-        TypeKind.USHORT,
-        TypeKind.UINT,
-        TypeKind.ULONG,
-        TypeKind.ULONGLONG,
-        TypeKind.UINT128,
-        TypeKind.CHAR_S,
-        TypeKind.SCHAR,
-        TypeKind.SHORT,
-        TypeKind.INT,
-        TypeKind.LONG,
-        TypeKind.LONGLONG,
-        TypeKind.INT128,
-        TypeKind.FLOAT,
-        TypeKind.DOUBLE,
-        TypeKind.LONGDOUBLE,
-        TypeKind.ENUM,
-    ):
+    if canonical_type.kind in BASE_TYPE:
         ctx.prev_cursor = cursor
-        ctx.source_code.write(
-            f"    FIELD_NUMBER({ctx.struct_type_spelling}, {cursor.spelling}),\n"
+        ctx.current_object_sio.write(
+            f"    FIELD_NUMBER({ctx.parent_spelling}, {cursor.spelling}),\n"
         )
         return
 
@@ -126,6 +172,17 @@ def process_field(cursor: Cursor, ctx: Context):
         TypeKind.CONSTANTARRAY,
         TypeKind.VARIABLEARRAY,
     ):
+        comment = cursor.raw_comment
+        if comment:
+            if "@string" in comment:
+                process_string(cursor, ctx)
+                return
+
+        element_type = cursor.type.get_array_element_type()
+        if element_type.spelling == "char":
+            process_string(cursor, ctx)
+            return
+
         process_array(cursor, ctx)
         return
 
@@ -137,53 +194,64 @@ def process_field(cursor: Cursor, ctx: Context):
 
         prefix_str = struct_or_union.get(element_type_declaration.kind)
 
-        element_name = element_type_declaration.spelling
-        ctx.source_code.write(
-            f"    {prefix_str}({ctx.struct_type_spelling}, {cursor.spelling}, {element_name}Columns),\n"
+        element_name = plugin_stub.generate_columns_name(element_type_declaration)
+
+        ctx.current_object_sio.write(
+            f"    {prefix_str}({ctx.parent_spelling}, {cursor.spelling}, {element_name}),\n"
         )
         return
+
+
+def process_union_or_struct(cursor: Cursor, ctx: Context):
+    location = cursor.location
+    fname = os.path.basename(location.file.name)
+    line = location.line
+    column = location.column
+
+    if not cursor.is_anonymous():
+        plugin_stub.begin_object(cursor)
+        object_name = plugin_stub.generate_object_name(cursor)
+    columns_name = plugin_stub.generate_columns_name(cursor)
+
+    ctx.current_object_sio.write(f"// {fname}:{line}:{column}\n")
+    ctx.current_object_sio.write(f"static const clColumn {columns_name}[] = {{\n")
+
+    for child in cursor.get_children():
+        name = child.spelling
+        if child.kind != CursorKind.FIELD_DECL:
+            continue
+
+        if child.is_anonymous():
+            ctx.push_new_object(f"__typeof((({ctx.parent_spelling} *)NULL)->{name})")
+            process_union_or_struct(child.type.get_declaration(), ctx)
+            ctx.pop_object()
+
+        process_field(child, ctx)
+
+    ctx.current_object_sio.write("};\n")
+
+    if cursor.kind != CursorKind.STRUCT_DECL:
+        return
+
+    if not cursor.is_anonymous():
+        ctx.current_object_sio.write(f"const clColumn {object_name}[] = {{\n")
+        ctx.current_object_sio.write(
+            f"    DEFINE_OBJECT({ctx.parent_spelling}, {columns_name}),\n"
+        )
+
+        ctx.current_object_sio.write("};\n")
+        ctx.header_sio.write(f"extern const struct clColumn {object_name}[];\n")
+
+        plugin_stub.end_object(cursor, object_name)
 
 
 def search_union_or_struct(cursor: Cursor, ctx: Context):
     if not cursor.spelling:
         return
 
-    ctx.prev_cursor = None
-    ctx.struct_type_spelling = cursor.type.spelling
-
-    location = cursor.location
-    name = os.path.basename(location.file.name)
-    line = location.line
-    column = location.column
-
-    plugin_stub.begin_object(cursor)
-    object_name = plugin_stub.generate_object_name(cursor)
-    columns_name = plugin_stub.generate_columns_name(cursor)
-
-    ctx.source_code.write(f"// {name}:{line}:{column}\n")
-
-    ctx.source_code.write(f"static const clColumn {columns_name}[] = {{\n")
-
-    for child in cursor.get_children():
-        if child.kind != CursorKind.FIELD_DECL:
-            continue
-
-        process_field(child, ctx)
-
-    ctx.source_code.write("};\n")
-
-    if cursor.kind != CursorKind.STRUCT_DECL:
-        return
-
-    ctx.source_code.write(f"const clColumn {object_name}[] = {{\n")
-    ctx.source_code.write(
-        f"    DEFINE_OBJECT({ctx.struct_type_spelling}, {columns_name}),\n"
-    )
-
-    ctx.source_code.write("};\n\n")
-    ctx.header_code.write(f"extern const struct clColumn {object_name}[];\n")
-
-    plugin_stub.end_object(cursor, object_name)
+    ctx.push_new_object(cursor.type.spelling)
+    process_union_or_struct(cursor, ctx)
+    ctx.pop_object()
 
 
 def search_namespace_or_union_or_struct(cursor: Cursor, ctx: Context):
@@ -307,7 +375,15 @@ def main():
 
         path = tu.spelling
         header_path = os.path.relpath(path, work_dir)
-        ctx = Context(tu=tu)
+        ctx = Context(
+            tu=tu,
+            header_sio=StringIO(),
+            current_object_sio=StringIO(),
+            object_stack=list(),
+            source_sio=StringIO(),
+            parent_spelling="",
+            prev_cursor=None,
+        )
 
         search_namespace_or_union_or_struct(tu.cursor, ctx)
 
@@ -322,26 +398,26 @@ def main():
                 HEADER_CODE_TPL,
                 {
                     "includes": includes_str,
-                    "code": ctx.header_code.getvalue().strip(),
+                    "code": ctx.header_sio.getvalue().strip(),
                 },
             ),
             render_tpl(
                 SOURCE_CODE_TPL,
                 {
                     "includes": render_include(header_path),
-                    "code": ctx.source_code.getvalue().strip(),
+                    "code": ctx.source_sio.getvalue().strip(),
                 },
             ),
         )
 
     suffix = guess_suffix(standard)
 
-    for stem, (header, source_code) in outputs.items():
+    for stem, (header, source) in outputs.items():
         with open(f"{stem}_def.h", mode="w", encoding="UTF-8") as out:
             out.write(header)
 
         with open(f"{stem}_def.{suffix}", mode="w", encoding="UTF-8") as out:
-            out.write(source_code)
+            out.write(source)
 
     plugin_stub.complete()
 

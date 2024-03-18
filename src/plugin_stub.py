@@ -1,5 +1,6 @@
 import importlib.util
 import os
+import re
 from clang.cindex import Cursor
 
 
@@ -34,7 +35,7 @@ def _plugin_stub(fn):
 
 @_plugin_stub
 def generate_columns_name(cursor: Cursor) -> str:
-    return f"{cursor.spelling}Columns"
+    return re.sub(r"[^a-zA-Z0-9]", "_", cursor.get_usr())
 
 
 @_plugin_stub
