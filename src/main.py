@@ -5,6 +5,7 @@ clcli.py
 """
 
 import sys
+import textwrap
 
 sys.dont_write_bytecode = True
 
@@ -35,20 +36,21 @@ class Context:
     current_object_sio: StringIO
     object_stack: list[tuple[str, StringIO]]
     source_sio: StringIO
-    parent_spelling: str
+    parent_tp_str: str
     prev_cursor: Cursor
+    source_code: bytes
 
-    def push_new_object(self, parent_spelling: str):
+    def push_new_object(self, parent_tp_str: str):
         self.prev_cursor = None
-        self.object_stack.append((self.parent_spelling, self.current_object_sio))
-        self.parent_spelling = parent_spelling
+        self.object_stack.append((self.parent_tp_str, self.current_object_sio))
+        self.parent_tp_str = parent_tp_str
         self.current_object_sio = StringIO()
 
     def pop_object(self):
-        parent_spelling, current_object_sio = self.object_stack.pop()
+        parent_tp_str, current_object_sio = self.object_stack.pop()
         self.source_sio.write(self.current_object_sio.getvalue())
         self.current_object_sio = current_object_sio
-        self.parent_spelling = parent_spelling
+        self.parent_tp_str = parent_tp_str
 
 
 def get_compile_args(include_dirs: list[str], standard: str) -> list[str]:
@@ -119,6 +121,21 @@ BASE_TYPE = [
 ]
 
 
+def get_tp_str(cursor: Cursor) -> str:
+    declaration = cursor.type.get_declaration()
+    if not declaration.is_anonymous():
+        return cursor.type.spelling
+
+    child_name = declaration.spelling
+    idx = child_name.index("(")
+    child_object_name = get_unique_name(declaration)
+    return child_name[:idx] + child_object_name
+
+
+def get_unique_name(cursor: Cursor) -> str:
+    return re.sub(r"[^a-zA-Z0-9]", "_", cursor.get_usr())
+
+
 def process_string(cursor: Cursor, ctx: Context):
     element_type = cursor.type.get_array_element_type()
 
@@ -131,7 +148,7 @@ def process_string(cursor: Cursor, ctx: Context):
         raise Exception("类型错误")
 
     ctx.current_object_sio.write(
-        f"    FIELD_STRING({ctx.parent_spelling}, {cursor.spelling}),\n"
+        f"    DEFINE_FIELD_STRING({ctx.parent_tp_str}, {cursor.spelling}),\n"
     )
 
 
@@ -149,11 +166,11 @@ def process_array(cursor: Cursor, ctx: Context):
     if element_type_declaration.kind != CursorKind.NO_DECL_FOUND:
         element_name = plugin_stub.generate_object_name(element_type_declaration)
         ctx.current_object_sio.write(
-            f"    FIELD_OBJECT_{prefix_str}({ctx.parent_spelling}, {cursor.spelling}, {element_name}),\n"
+            f"    DEFINE_FIELD_OBJECT_{prefix_str}({ctx.parent_tp_str}, {cursor.spelling}, {element_name}),\n"
         )
     else:
         ctx.current_object_sio.write(
-            f"    FIELD_{prefix_str}({ctx.parent_spelling}, {cursor.spelling}),\n"
+            f"    DEFINE_FIELD_{prefix_str}({ctx.parent_tp_str}, {cursor.spelling}),\n"
         )
 
 
@@ -164,7 +181,7 @@ def process_field(cursor: Cursor, ctx: Context):
     if canonical_type.kind in BASE_TYPE:
         ctx.prev_cursor = cursor
         ctx.current_object_sio.write(
-            f"    FIELD_NUMBER({ctx.parent_spelling}, {cursor.spelling}),\n"
+            f"    DEFINE_FIELD_NUMBER({ctx.parent_tp_str}, {cursor.spelling}),\n"
         )
         return
 
@@ -188,18 +205,41 @@ def process_field(cursor: Cursor, ctx: Context):
 
     if element_type_declaration.kind in (CursorKind.STRUCT_DECL, CursorKind.UNION_DECL):
         struct_or_union = {
-            CursorKind.UNION_DECL: "FIELD_UNION",
-            CursorKind.STRUCT_DECL: "FIELD_OBJECT",
+            CursorKind.UNION_DECL: "DEFINE_FIELD_UNION",
+            CursorKind.STRUCT_DECL: "DEFINE_FIELD_OBJECT",
         }
 
         prefix_str = struct_or_union.get(element_type_declaration.kind)
 
-        element_name = plugin_stub.generate_columns_name(element_type_declaration)
+        unique_name = get_unique_name(element_type_declaration)
 
         ctx.current_object_sio.write(
-            f"    {prefix_str}({ctx.parent_spelling}, {cursor.spelling}, {element_name}),\n"
+            f"    {prefix_str}({ctx.parent_tp_str}, {cursor.spelling}, {unique_name}),\n"
         )
-        return
+
+
+def process_inline_union_or_struct(cursor: Cursor, ctx: Context):
+    extent = cursor.extent
+
+    unique_name = get_unique_name(cursor)
+
+    start = extent.start.offset
+    end = extent.end.offset
+
+    source_code = str(ctx.source_code[start:end], encoding="UTF-8")
+    open_curly_idx = source_code.index("{")
+
+    idx = open_curly_idx - 1
+    while idx >= 0 and source_code[idx].isspace():
+        idx = idx - 1
+
+    idx = idx + 1
+    source_code = source_code[:idx] + f" {unique_name}" + source_code[idx:] + ";\n"
+    source_code = textwrap.dedent(" " * (extent.start.column - 1) + source_code)
+
+    ctx.push_new_object(unique_name)
+    ctx.current_object_sio.write(source_code)
+    ctx.pop_object()
 
 
 def process_union_or_struct(cursor: Cursor, ctx: Context):
@@ -211,18 +251,24 @@ def process_union_or_struct(cursor: Cursor, ctx: Context):
     if not cursor.is_anonymous():
         plugin_stub.begin_object(cursor)
         object_name = plugin_stub.generate_object_name(cursor)
-    columns_name = plugin_stub.generate_columns_name(cursor)
+    unique_name = get_unique_name(cursor)
 
     ctx.current_object_sio.write(f"// {fname}:{line}:{column}\n")
-    ctx.current_object_sio.write(f"static const clColumn {columns_name}[] = {{\n")
+    ctx.current_object_sio.write(f"static const clColumn {unique_name}[] = {{\n")
 
     for child in cursor.get_children():
         name = child.spelling
+
+        if child.kind == CursorKind.UNION_DECL or child.kind == CursorKind.STRUCT_DECL:
+            process_inline_union_or_struct(child, ctx)
+            continue
+
         if child.kind != CursorKind.FIELD_DECL:
             continue
 
         if child.is_anonymous():
-            ctx.push_new_object(f"__typeof((({ctx.parent_spelling} *)NULL)->{name})")
+            tp_str = get_tp_str(child)
+            ctx.push_new_object(tp_str)
             process_union_or_struct(child.type.get_declaration(), ctx)
             ctx.pop_object()
 
@@ -236,7 +282,7 @@ def process_union_or_struct(cursor: Cursor, ctx: Context):
     if not cursor.is_anonymous():
         ctx.current_object_sio.write(f"const clColumn {object_name}[] = {{\n")
         ctx.current_object_sio.write(
-            f"    DEFINE_OBJECT({ctx.parent_spelling}, {columns_name}),\n"
+            f"    DEFINE_OBJECT({ctx.parent_tp_str}, {unique_name}),\n"
         )
 
         ctx.current_object_sio.write("};\n")
@@ -285,10 +331,10 @@ def search_namespace_or_union_or_struct(cursor: Cursor, ctx: Context):
 SOURCE_CODE_TPL = """
 // generated by the columns. DO NOT EDIT!
 
-$includes
-
 #define USE_COLUMN_MACROS
 #include <columns.h>
+
+$includes
 
 #ifdef __cplusplus
 extern "C" {
@@ -296,6 +342,7 @@ extern "C" {
 
 $code
 
+$extra_output
 #ifdef __cplusplus
 }
 #endif
@@ -306,6 +353,7 @@ HEADER_CODE_TPL = """
 
 // generated by the columns. DO NOT EDIT!
 #include <columns.h>
+
 $includes
 
 #ifdef __cplusplus
@@ -315,6 +363,7 @@ struct clColumn;
 
 $code
 
+$extra_output
 #ifdef __cplusplus
 }
 #endif
@@ -325,9 +374,11 @@ def render_tpl(tpl: str, data: dict[str, str]) -> str:
     result = tpl
 
     for k, v in data.items():
-        result = re.sub(f"\\${k}\\r?\\n?", v, result)
+        result = re.sub(f"\\${k}", v, result)
 
-    return result.strip() + "\n"
+    result = result.strip() + "\n"
+    result = re.sub("(\\r*\\n{3,})", "\r\n\r\n", result)
+    return result
 
 
 def render_include(path: str) -> str:
@@ -368,9 +419,14 @@ def main():
     if len(plugin) > 0:
         plugin_stub.load_plugin(plugin)
 
-    plugin_stub.init()
-
     for path in inputs:
+        plugin_stub.init()
+
+        source_code = bytes()
+
+        with open(path, "rb") as f:
+            source_code = f.read()
+
         tu = create_unit(path, includes, standard)
 
         path = tu.spelling
@@ -381,11 +437,16 @@ def main():
             current_object_sio=StringIO(),
             object_stack=list(),
             source_sio=StringIO(),
-            parent_spelling="",
+            parent_tp_str="",
             prev_cursor=None,
+            source_code=source_code,
         )
 
         search_namespace_or_union_or_struct(tu.cursor, ctx)
+
+        extra_output = plugin_stub.complete()
+        if not extra_output:
+            extra_output = ("", "")
 
         stem, _ = os.path.splitext(header_path)
 
@@ -399,6 +460,7 @@ def main():
                 {
                     "includes": includes_str,
                     "code": ctx.header_sio.getvalue().strip(),
+                    "extra_output": extra_output[0],
                 },
             ),
             render_tpl(
@@ -406,6 +468,7 @@ def main():
                 {
                     "includes": render_include(header_path),
                     "code": ctx.source_sio.getvalue().strip(),
+                    "extra_output": extra_output[1],
                 },
             ),
         )
@@ -418,8 +481,6 @@ def main():
 
         with open(f"{stem}_def.{suffix}", mode="w", encoding="UTF-8") as out:
             out.write(source)
-
-    plugin_stub.complete()
 
 
 if __name__ == "__main__":

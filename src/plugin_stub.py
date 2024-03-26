@@ -1,6 +1,7 @@
 import importlib.util
 import os
 import re
+import typing
 from clang.cindex import Cursor
 
 
@@ -31,11 +32,6 @@ def _plugin_stub(fn):
         return fn(*args, **kwargs)
 
     return wrapper
-
-
-@_plugin_stub
-def generate_columns_name(cursor: Cursor) -> str:
-    return re.sub(r"[^a-zA-Z0-9]", "_", cursor.get_usr())
 
 
 @_plugin_stub
@@ -91,5 +87,5 @@ def init():
 
 
 @_plugin_stub
-def complete():
+def complete() -> typing.Tuple[str, str]:
     pass

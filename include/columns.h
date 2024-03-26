@@ -150,7 +150,7 @@ template <class T> struct clColumnTraits {
 
 #endif
 
-#define FIELD_NUMBER(PARENT, FIELD)                                            \
+#define DEFINE_FIELD_NUMBER(PARENT, FIELD)                                     \
   {                                                                            \
     .tp = COLUMN_TYPE(PARENT, FIELD),                                          \
     .name =                                                                    \
@@ -163,7 +163,7 @@ template <class T> struct clColumnTraits {
     .offset = offsetof(PARENT, FIELD),                                         \
   }
 
-#define FIELD_OBJECT(PARENT, FIELD, FIELDS)                                    \
+#define DEFINE_FIELD_OBJECT(PARENT, FIELD, FIELDS)                             \
   {                                                                            \
     .tp = cl_OBJECT,                                                           \
     .name =                                                                    \
@@ -183,7 +183,7 @@ template <class T> struct clColumnTraits {
     },                                                                         \
   }
 
-#define FIELD_UNION(PARENT, FIELD, FIELDS)                                     \
+#define DEFINE_FIELD_UNION(PARENT, FIELD, FIELDS)                              \
   {                                                                            \
     .tp = cl_UNION,                                                            \
     .name =                                                                    \
@@ -203,7 +203,7 @@ template <class T> struct clColumnTraits {
     },                                                                         \
   }
 
-#define FIELD_FIXED_ARRAY(PARENT, FIELD)                                       \
+#define DEFINE_FIELD_FIXED_ARRAY(PARENT, FIELD)                                \
   {                                                                            \
     .tp = cl_FIXED_ARRAY,                                                      \
     .name =                                                                    \
@@ -225,7 +225,7 @@ template <class T> struct clColumnTraits {
     },                                                                         \
   }
 
-#define FIELD_OBJECT_FIXED_ARRAY(PARENT, FIELD, ELEMENT)                       \
+#define DEFINE_FIELD_OBJECT_FIXED_ARRAY(PARENT, FIELD, ELEMENT)                \
   {                                                                            \
     .tp = cl_FIXED_ARRAY,                                                      \
     .name =                                                                    \
@@ -247,7 +247,7 @@ template <class T> struct clColumnTraits {
     },                                                                         \
   }
 
-#define FIELD_FLEXIBLE_ARRAY(PARENT, FIELD)                                    \
+#define DEFINE_FIELD_FLEXIBLE_ARRAY(PARENT, FIELD)                             \
   {                                                                            \
     .tp = cl_FLEXIBLE_ARRAY,                                                   \
     .name =                                                                    \
@@ -269,7 +269,7 @@ template <class T> struct clColumnTraits {
     },                                                                         \
   }
 
-#define FIELD_OBJECT_FLEXIBLE_ARRAY(PARENT, FIELD, ELEMENT)                    \
+#define DEFINE_FIELD_OBJECT_FLEXIBLE_ARRAY(PARENT, FIELD, ELEMENT)             \
   {                                                                            \
     .tp = cl_FLEXIBLE_ARRAY,                                                   \
     .name =                                                                    \
@@ -291,7 +291,7 @@ template <class T> struct clColumnTraits {
     },                                                                         \
   }
 
-#define FIELD_STRING(PARENT, FIELD)                                            \
+#define DEFINE_FIELD_STRING(PARENT, FIELD)                                     \
   {                                                                            \
     .tp = cl_STRING,                                                           \
     .name =                                                                    \

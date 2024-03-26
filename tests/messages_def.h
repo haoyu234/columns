@@ -14,6 +14,8 @@ extern const struct clColumn stUseItemRspObject[];
 extern const struct clColumn stInlineUnionObject[];
 extern const struct clColumn stFuzzObject[];
 extern const struct clColumn stTestsObject[];
+
+// extra_output 1
 #ifdef __cplusplus
 }
 #endif
